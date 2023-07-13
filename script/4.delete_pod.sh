@@ -2,10 +2,10 @@
 
 # kubectl delete -f deploy/ --context arn:aws:eks:us-east-2:741566967679:cluster/eks-cluster
 # kubectl delete -f deploy/ --context master2
-#kubectl delete -f deploy/ --context cluster3
-#kubectl delete -f deploy/ --context cluster4
-#kubectl delete -f deploy/ --context cluster5
-#kubectl delete -f deploy/ --context aks-test
+# kubectl delete -f deploy/ --context cluster3
+# kubectl delete -f deploy/ --context cluster4
+# kubectl delete -f deploy/ --context cluster5
+# kubectl delete -f deploy/ --context aks-test
 # kubectl delete -f deploy/ --context uni-master
 #kubectl delete -f deploy/ --context gke_keti-container_us-central1-a_gke-cluster
 #kubectl delete -f deploy/ --context eks-cluster1
