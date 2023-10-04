@@ -106,7 +106,7 @@ func (e *Engine) podStatus() {
 	for _, podIP := range e.Watcher.NodeIPMapper {
 		podMap := e.Client.GetPodMetric(podIP)
 		for podName, metric := range podMap {
-			if metric.CPUUsage > 60 || metric.MemoryUsage > 60 || metric.StorageUsage > 60 || metric.NetworkRXByte > 10737418240 || metric.NetworkTXByte > 10737418240 {
+			if metric.CPUUsage > 60 || metric.MemoryUsage > 60 {
 				fmt.Println("** Pod Status check **")
 				fmt.Println("Pod name :", podName)
 				fmt.Println("CPU Usage :", metric.CPUUsage)
