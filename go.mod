@@ -3,7 +3,7 @@ module analysis-engine
 go 1.19
 
 require (
-	github.com/KETI-Hybrid/keti-controller v0.0.0-20230713041430-59741544afc1
+	github.com/KETI-Hybrid/keti-controller v0.0.0-20231004021214-46b5948d5b74
 	google.golang.org/grpc v1.56.2
 	google.golang.org/protobuf v1.30.0
 	k8s.io/api v0.26.0

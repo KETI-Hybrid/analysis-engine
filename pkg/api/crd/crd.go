@@ -1,15 +1,30 @@
 package crd
 
 import (
-	ketiv1 "github.com/KETI-Hybrid/keti-controller/api/v1"
+	authv1 "github.com/KETI-Hybrid/keti-controller/apis/auth/v1"
+	cloudv1 "github.com/KETI-Hybrid/keti-controller/apis/cloud/v1"
+	levelv1 "github.com/KETI-Hybrid/keti-controller/apis/level/v1"
+	resourcev1 "github.com/KETI-Hybrid/keti-controller/apis/resource/v1"
 	keticlient "github.com/KETI-Hybrid/keti-controller/client"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 )
 
-func NewClient() (*keticlient.KetiV1Client, error) {
-	err := ketiv1.AddToScheme(scheme.Scheme)
+func NewClient() (*keticlient.ClientSet, error) {
+	err := authv1.AddToScheme(scheme.Scheme)
+	if err != nil {
+		klog.Errorln(err)
+	}
+	err = cloudv1.AddToScheme(scheme.Scheme)
+	if err != nil {
+		klog.Errorln(err)
+	}
+	err = resourcev1.AddToScheme(scheme.Scheme)
+	if err != nil {
+		klog.Errorln(err)
+	}
+	err = levelv1.AddToScheme(scheme.Scheme)
 	if err != nil {
 		klog.Errorln(err)
 	}
