@@ -55,7 +55,7 @@ func (cm *ClientManager) GetMetric(podIP string) *pb.Response {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	r, err := metricClient.Get(ctx, &pb.Request{})
+	r, err := metricClient.GetNode(ctx, &pb.Request{})
 	if err != nil {
 		klog.Errorf("could not request: %v \n", err)
 	}
@@ -73,7 +73,7 @@ func (cm *ClientManager) GetPodMetric(podIP string) map[string]Metric {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	r, err := metricClient.Get(ctx, &pb.Request{})
+	r, err := metricClient.GetPod(ctx, &pb.Request{})
 	if err != nil {
 		klog.Errorf("could not request: %v \n", err)
 	}
