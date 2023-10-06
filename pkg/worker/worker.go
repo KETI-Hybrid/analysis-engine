@@ -2,18 +2,22 @@ package worker
 
 import (
 	"analysis-engine/pkg/api"
+	"analysis-engine/pkg/api/score"
 	"analysis-engine/pkg/watcher"
 	"context"
 	"fmt"
+	"net"
 	"strings"
 	"time"
 
+	"google.golang.org/grpc"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 )
 
 type Engine struct {
+	score.UnimplementedMetricGRPCServer
 	Client        *api.ClientManager
 	Watcher       *watcher.Watcher
 	NodeScore     map[string]float32
@@ -33,7 +37,7 @@ func InitEngine() *Engine {
 }
 
 func (e *Engine) Work() {
-
+	go e.StartGRPCServer()
 	go e.Watcher.StartWatch()
 	go e.Watcher.StartDeploymentWatch()
 	for {
@@ -116,5 +120,24 @@ func (e *Engine) podStatus() {
 				fmt.Println("NetworkRXByte :", metric.NetworkRXByte)
 			}
 		}
+	}
+}
+
+func (e *Engine) GetNodeScore(ctx context.Context, in *score.Request) (*score.Response, error) {
+	res := &score.Response{}
+	res.Message = e.NodeScore
+	return res, nil
+}
+
+func (e *Engine) StartGRPCServer() {
+	lis, err := net.Listen("tcp", ":50051")
+	if err != nil {
+		klog.Fatalf("failed to listen: %v", err)
+	}
+	scoreServer := grpc.NewServer()
+	score.RegisterMetricGRPCServer(scoreServer, e)
+	fmt.Println("score server started...")
+	if err := scoreServer.Serve(lis); err != nil {
+		klog.Fatalf("failed to serve: %v", err)
 	}
 }

@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package score;
+
+option go_package = "analysis-engine/pkg/api/score";
+
+service MetricGRPC {
+    rpc GetNodeScore(Request) returns (Response);
+}
+
+message Request {
+}
+
+message Response {
+  map<string, float> message = 1;
+}
