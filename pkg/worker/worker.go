@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"strings"
 	"time"
 
 	"google.golang.org/grpc"
@@ -59,35 +58,41 @@ func (e *Engine) printNodeScore() {
 func (e *Engine) nodeStatus() {
 	for nodeName, podIP := range e.Watcher.NodeIPMapper {
 		resp := e.Client.GetMetric(podIP)
-		cpuUsage := resp.Message["Host_CPU_Core_Usage"].Metric[0].GetGauge().GetValue()
-		memoryUsage := resp.Message["Host_Memory_Usage"].Metric[0].GetGauge().GetValue()
-		storageUsage := resp.Message["Host_Storage_Usage"].Metric[0].GetGauge().GetValue()
-		networkUsage := resp.Message["Host_Network_Usage"].Metric[0].GetGauge().GetValue()
-		score := ((30 * cpuUsage) + (30 * memoryUsage) + (20 * storageUsage) + (networkUsage)) / 81
+		cpuUsage := resp.Message["Host_CPU_Percent"].Metric[0].GetGauge().GetValue()
+		memoryUsage := resp.Message["Host_Memory_Percent"].Metric[0].GetGauge().GetValue()
+		storageUsage := resp.Message["Host_Storage_Percent"].Metric[0].GetGauge().GetValue()
+		score := (0.5 * cpuUsage) + (0.3 * memoryUsage) + (0.2 * storageUsage)
 		e.NodeScore[nodeName] = float32(score)
 	}
 	e.printNodeScore()
 }
 
 func (e *Engine) nodeJoinCheck() {
-	logMessage := `** Node join check **
-Joined node list :`
+	fmt.Println("** Node join check **")
 
 	hybridNodes, err := e.Client.KetiClient.ResourceV1().Nodes().List(metav1.ListOptions{})
 	if err != nil {
 		klog.Errorln(err)
 	}
-	nodeNameList := make([]string, len(hybridNodes.Items))
+
+	fmt.Print("Joined node list : ")
 	for i, node := range hybridNodes.Items {
 		if _, ok := e.NodeScore[node.Name]; !ok {
 			e.NodeScore[node.Name] = 0
 		}
-		nodeNameList[i] = node.Name
+
+		if node.Name == "hcp-master" {
+			continue
+		}
+
+		fmt.Print(node.Name)
+
+		if i+1 < len(hybridNodes.Items) {
+			fmt.Print(", ")
+		}
 	}
 
-	nodeNameStr := strings.Join(nodeNameList, ", ")
-
-	fmt.Println(logMessage, nodeNameStr)
+	fmt.Print("\n")
 }
 
 func (e *Engine) deploymentStatus() {
@@ -97,12 +102,18 @@ func (e *Engine) deploymentStatus() {
 	if err != nil {
 		klog.Errorln(err)
 	}
+	var count int64 = 0
+	fmt.Print("Detect deployment : ")
 	for _, deployment := range deployments.Items {
 		if deployment.Namespace == "keti-system" || deployment.Namespace == "kube-system" || deployment.Namespace == "keti-controller-system" {
 			continue
+		} else {
+			fmt.Print(deployment.Name)
+			count += 1
 		}
-
-		fmt.Printf("Detect deployment : %s \n", deployment.Name)
+	}
+	if count == 0 {
+		fmt.Println("None")
 	}
 }
 
@@ -110,7 +121,7 @@ func (e *Engine) podStatus() {
 	for _, podIP := range e.Watcher.NodeIPMapper {
 		podMap := e.Client.GetPodMetric(podIP)
 		for podName, metric := range podMap {
-			if metric.CPUUsage > 60 || metric.MemoryUsage > 60 {
+			if metric.CPUUsage > 60 || metric.MemoryUsage > 60 || metric.StorageUsage > 60 {
 				fmt.Println("** Pod Status check **")
 				fmt.Println("Pod name :", podName)
 				fmt.Println("CPU Usage :", metric.CPUUsage)
