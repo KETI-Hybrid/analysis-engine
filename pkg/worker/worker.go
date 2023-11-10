@@ -3,10 +3,13 @@ package worker
 import (
 	"analysis-engine/pkg/api"
 	"analysis-engine/pkg/api/score"
+	"analysis-engine/pkg/housekeeping"
 	"analysis-engine/pkg/watcher"
+	"analysis-engine/pkg/watcher/mapper"
 	"context"
 	"fmt"
 	"net"
+	"strconv"
 	"time"
 
 	"google.golang.org/grpc"
@@ -19,6 +22,7 @@ type Engine struct {
 	score.UnimplementedMetricGRPCServer
 	Client        *api.ClientManager
 	Watcher       *watcher.Watcher
+	Keeper        *housekeeping.HouseKeeper
 	NodeScore     map[string]float32
 	DeploymentMap map[string]bool
 }
@@ -30,6 +34,7 @@ func InitEngine() *Engine {
 	return &Engine{
 		Client:        client,
 		Watcher:       wtc,
+		Keeper:        housekeeping.NewHouseKeeper(client.KetiClient, client.KubeClient),
 		NodeScore:     make(map[string]float32),
 		DeploymentMap: make(map[string]bool),
 	}
@@ -37,7 +42,6 @@ func InitEngine() *Engine {
 
 func (e *Engine) Work() {
 	go e.StartGRPCServer()
-	go e.Watcher.StartWatch()
 	go e.Watcher.StartDeploymentWatch()
 	for {
 		e.nodeJoinCheck()
@@ -56,11 +60,27 @@ func (e *Engine) printNodeScore() {
 }
 
 func (e *Engine) nodeStatus() {
-	for nodeName, podIP := range e.Watcher.NodeIPMapper {
-		resp := e.Client.GetMetric(podIP)
-		cpuUsage := resp.Message["Host_CPU_Percent"].Metric[0].GetGauge().GetValue()
-		memoryUsage := resp.Message["Host_Memory_Percent"].Metric[0].GetGauge().GetValue()
-		storageUsage := resp.Message["Host_Storage_Percent"].Metric[0].GetGauge().GetValue()
+	e.Watcher.NodeMapper = make(mapper.NodeMetricMapper)
+	e.Watcher.NodeMapper = e.Keeper.NodeKeeping(e.Watcher.NodeMapper)
+	for nodeName, _ := range e.Watcher.NodeMapper {
+		// klog.Infoln("Node Name = ", nodeName)
+		resp := e.Client.GetMetric(nodeName)
+		cpuUsage, _ := strconv.ParseFloat(resp.HostCPUPercent.Value, 64)
+		// if err != nil {
+		// 	klog.Errorln(err)
+		// }
+		memoryUsage, _ := strconv.ParseFloat(resp.HostMemoryPercent.Value, 64)
+		// if err != nil {
+		// 	klog.Errorln(err)
+		// }
+		storageUsage, _ := strconv.ParseFloat(resp.HostStoragyPercent.Value, 64)
+		// if err != nil {
+		// 	klog.Errorln(err)
+		// }
+		fmt.Println("Nodename : ", nodeName)
+		fmt.Println("cpuUsage : ", cpuUsage)
+		fmt.Println("memoryUsage : ", memoryUsage)
+		fmt.Println("storageUsage : ", storageUsage)
 		score := (0.5 * cpuUsage) + (0.3 * memoryUsage) + (0.2 * storageUsage)
 		e.NodeScore[nodeName] = float32(score)
 	}
@@ -70,10 +90,10 @@ func (e *Engine) nodeStatus() {
 func (e *Engine) nodeJoinCheck() {
 	fmt.Println("** Node join check **")
 
-	hybridNodes, err := e.Client.KetiClient.ResourceV1().Nodes().List(metav1.ListOptions{})
-	if err != nil {
-		klog.Errorln(err)
-	}
+	hybridNodes, _ := e.Client.KetiClient.ResourceV1().Nodes().List(metav1.ListOptions{})
+	// if err != nil {
+	// 	klog.Errorln(err)
+	// }
 
 	fmt.Print("Joined node list : ")
 	for i, node := range hybridNodes.Items {
@@ -98,39 +118,92 @@ func (e *Engine) nodeJoinCheck() {
 func (e *Engine) deploymentStatus() {
 	fmt.Println("** Deployment status check **")
 
-	deployments, err := e.Client.KubeClient.AppsV1().Deployments(corev1.NamespaceAll).List(context.Background(), metav1.ListOptions{})
-	if err != nil {
-		klog.Errorln(err)
-	}
+	deployments, _ := e.Client.KubeClient.AppsV1().Deployments(corev1.NamespaceAll).List(context.Background(), metav1.ListOptions{})
+	// if err != nil {
+	// 	klog.Errorln(err)
+	// }
 	var count int64 = 0
 	fmt.Print("Detect deployment : ")
-	for _, deployment := range deployments.Items {
-		if deployment.Namespace == "keti-system" || deployment.Namespace == "kube-system" || deployment.Namespace == "keti-controller-system" {
+	for i, deployment := range deployments.Items {
+		if deployment.Namespace == "cdi" || deployment.Namespace == "keti-controller-system" || deployment.Namespace == "keti-system" || deployment.Namespace == "kube-flannel" || deployment.Namespace == "kube-node-lease" || deployment.Namespace == "kube-public" || deployment.Namespace == "kube-system" || deployment.Namespace == "kubevirt" {
 			continue
 		} else {
-			fmt.Print(deployment.Name)
+			if i < len(deployments.Items)-1 {
+				fmt.Print(deployment.Name, ", ")
+			}
 			count += 1
 		}
 	}
+
+	fmt.Print("\n")
 	if count == 0 {
 		fmt.Println("None")
 	}
 }
 
 func (e *Engine) podStatus() {
-	for _, podIP := range e.Watcher.NodeIPMapper {
-		podMap := e.Client.GetPodMetric(podIP)
-		for podName, metric := range podMap {
-			if metric.CPUUsage > 60 || metric.MemoryUsage > 60 || metric.StorageUsage > 60 {
-				fmt.Println("** Pod Status check **")
-				fmt.Println("Pod name :", podName)
-				fmt.Println("CPU Usage :", metric.CPUUsage)
-				fmt.Println("Memory Usage :", metric.MemoryUsage)
-				fmt.Println("Storage Usage :", metric.StorageUsage)
-				fmt.Println("NetworkTXByte :", metric.NetworkTXByte)
-				fmt.Println("NetworkRXByte :", metric.NetworkRXByte)
+	fmt.Println("** Pod Status check **")
+	overPod := false
+	e.Watcher.PodMapper = make(mapper.PodMetricMapper)
+	e.Watcher.PodMapper = e.Keeper.PodKeeping(e.Watcher.PodMapper)
+	for podName, _ := range e.Watcher.PodMapper {
+		metric := e.Client.GetPodMetric(podName)
+		CPUUsage, _ := strconv.ParseFloat(metric.CPUCoreGauge.Value, 64)
+		// if err != nil {
+		// 	klog.Errorln(err)
+		// }
+		MemoryUsage, _ := strconv.ParseFloat(metric.MemoryGauge.Value, 64)
+		// if err != nil {
+		// 	klog.Errorln(err)
+		// }
+		StorageUsage, _ := strconv.ParseFloat(metric.StorageGauge.Value, 64)
+		// if err != nil {
+		// 	klog.Errorln(err)
+		// }
+		NetworkTXByte, _ := strconv.ParseFloat(metric.NetworkTXCounter.Value, 64)
+		// if err != nil {
+		// 	klog.Errorln(err)
+		// }
+		NetworkRXByte, _ := strconv.ParseFloat(metric.NetworkRXCounter.Value, 64)
+		// if err != nil {
+		// 	klog.Errorln(err)
+		// }
+		if CPUUsage > 50 || MemoryUsage > 50 || StorageUsage > 50 {
+			overPod = true
+			fmt.Println("Pod name :", podName)
+			fmt.Println("CPU Usage :", CPUUsage)
+			fmt.Println("Memory Usage :", MemoryUsage)
+			fmt.Println("Storage Usage :", StorageUsage)
+			if NetworkRXByte < 0 {
+				NetworkRXByte = 0
+			}
+			if NetworkTXByte < 0 {
+				NetworkTXByte = 0
+			}
+			fmt.Println("NetworkTXByte :", NetworkTXByte)
+			fmt.Println("NetworkRXByte :", NetworkRXByte)
+
+			pods, _ := e.Client.KubeClient.CoreV1().Pods("").List(context.Background(), metav1.ListOptions{})
+			// if err != nil {
+			// 	klog.Errorln(err)
+			// }
+			for _, pod := range pods.Items {
+				if pod.Name == podName {
+					if pod.Namespace == "cdi" || pod.Namespace == "keti-controller-system" || pod.Namespace == "keti-system" || pod.Namespace == "kube-flannel" || pod.Namespace == "kube-node-lease" || pod.Namespace == "kube-public" || pod.Namespace == "kube-system" || pod.Namespace == "kubevirt" {
+						continue
+					} else {
+						sec := int64(0)
+						err := e.Client.KubeClient.CoreV1().Pods(pod.Namespace).Delete(context.Background(), pod.Name, metav1.DeleteOptions{GracePeriodSeconds: &sec})
+						if err != nil {
+							klog.Errorln(err)
+						}
+					}
+				}
 			}
 		}
+	}
+	if !overPod {
+		fmt.Println("Current Overload Pod : None")
 	}
 }
 

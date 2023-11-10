@@ -6,39 +6,25 @@ import (
 	"context"
 	"fmt"
 
+	keticlient "github.com/KETI-Hybrid/keti-controller/client"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/klog/v2"
 )
 
 type Watcher struct {
-	WatchInterface watch.Interface
-	NodeIPMapper   mapper.MetricMapper
-
+	PodMapper         mapper.PodMetricMapper
+	NodeMapper        mapper.NodeMetricMapper
 	DeploymentWatcher watch.Interface
 	Deploymentmap     map[string]bool
+	KetiClient        *keticlient.ClientSet
 }
 
 func AttachWatcher(cm *api.ClientManager) *Watcher {
 	result := &Watcher{}
 	var err error
-	podPrefix := cm.KubeClient.CoreV1().Pods("keti-system")
-	labelMap := make(map[string]string)
-	labelMap["name"] = "metric-collector"
-
-	options := metav1.ListOptions{
-		LabelSelector: labels.SelectorFromSet(labelMap).String(),
-	}
-
-	result.WatchInterface, err = podPrefix.Watch(context.Background(), options)
-	if err != nil {
-		klog.Errorln(err)
-	}
-
-	result.NodeIPMapper = mapper.NewMapper(cm)
 
 	depPrefix := cm.KubeClient.AppsV1().Deployments(corev1.NamespaceAll)
 	result.DeploymentWatcher, err = depPrefix.Watch(context.Background(), metav1.ListOptions{})
@@ -46,16 +32,10 @@ func AttachWatcher(cm *api.ClientManager) *Watcher {
 		klog.Errorln(err)
 	}
 	result.Deploymentmap = make(map[string]bool)
+	result.NodeMapper = make(mapper.NodeMetricMapper)
+	result.PodMapper = make(mapper.PodMetricMapper)
 
 	return result
-}
-
-func (w *Watcher) StartWatch() {
-	for {
-		event := <-w.WatchInterface.ResultChan()
-		pod := event.Object.(*corev1.Pod)
-		w.NodeIPMapper[pod.Spec.NodeName] = pod.Status.PodIP
-	}
 }
 
 func (w *Watcher) StartDeploymentWatch() {
