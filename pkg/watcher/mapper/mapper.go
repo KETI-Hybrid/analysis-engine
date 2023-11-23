@@ -15,26 +15,34 @@ type NodeMetricMapper map[string]time.Time
 
 func NewPodMapper(cm *api.ClientManager) PodMetricMapper {
 	pods, err := cm.KubeClient.CoreV1().Pods(corev1.NamespaceAll).List(context.Background(), metav1.ListOptions{})
+	
 	if err != nil {
 		klog.Errorln(err)
 	}
+	
 	podMapper := make(map[string]time.Time)
+	
 	for _, pod := range pods.Items {
 		if pod.Status.Phase == corev1.PodRunning {
 			podMapper[pod.Name] = time.Now()
 		}
 	}
+	
 	return podMapper
 }
 
 func NewNodeMapper(cm *api.ClientManager) NodeMetricMapper {
 	nodes, err := cm.KubeClient.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
+	
 	if err != nil {
 		klog.Errorln(err)
 	}
+	
 	nodeMapper := make(map[string]time.Time)
+	
 	for _, node := range nodes.Items {
 		nodeMapper[node.Name] = time.Now()
 	}
+	
 	return nodeMapper
 }
