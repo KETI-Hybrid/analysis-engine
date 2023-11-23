@@ -44,6 +44,7 @@ func (w *Watcher) StartDeploymentWatch() {
 		deployment := event.Object.(*appsv1.Deployment)
 		switch event.Type {
 		case watch.Added:
+			
 			if deployment.Namespace == "keti-system" || deployment.Namespace == "kube-system" || deployment.Namespace == "keti-controller-system" {
 				continue
 			}
