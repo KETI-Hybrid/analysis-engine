@@ -24,6 +24,7 @@ func NewClientManager() *ClientManager {
 	if err != nil {
 		klog.Errorln(err)
 	}
+	
 	result.KubeClient, err = k8s.NewClient()
 	if err != nil {
 		klog.Errorln(err)
@@ -42,6 +43,7 @@ type Metric struct {
 
 func (cm *ClientManager) GetMetric(nodeName string) levelv1.NodeMetricSpec {
 	nodeMetric, err := cm.KetiClient.LevelV1().NodeMetrics().Get(nodeName, metav1.GetOptions{})
+	
 	if err != nil {
 		klog.Errorln(err)
 	}
