@@ -7,4 +7,3 @@ NAME=$(kubectl get pod -n $NS | grep -E 'analysis-engine' | awk '{print $1}')
 
 #kubectl exec -it $NAME -n $NS /bin/sh
 kubectl logs -f -n $NS $NAME
-
