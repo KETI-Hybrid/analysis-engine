@@ -13,12 +13,18 @@ import (
 type PodMetricMapper map[string]time.Time
 type NodeMetricMapper map[string]time.Time
 
+func NewMapper(cm *api.ClientManager) MetricMapper {
+	podPrefix := cm.KubeClient.CoreV1().Pods("keti-system")
+	labelMap := make(map[string]string)
+	labelMap["name"] = "hpc-metric-collector"
+
+	options := metav1.ListOptions{
+		LabelSelector: labels.SelectorFromSet(labelMap).String(),
 func NewPodMapper(cm *api.ClientManager) PodMetricMapper {
 	pods, err := cm.KubeClient.CoreV1().Pods(corev1.NamespaceAll).List(context.Background(), metav1.ListOptions{})
 	
 	if err != nil {
 		klog.Errorln(err)
-	}
 	
 	podMapper := make(map[string]time.Time)
 	
