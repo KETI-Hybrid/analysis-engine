@@ -27,9 +27,6 @@ func NewHouseKeeper(keticlient *keticlient.ClientSet, kubeclient *kubernetes.Cli
 
 func (hk *HouseKeeper) NodeKeeping(nodeMap mapper.NodeMetricMapper) mapper.NodeMetricMapper {
 	nodes, err := hk.KubeClient.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
-	if err != nil {
-		klog.Errorln(err)
-	}
 	for _, node := range nodes.Items {
 		nodeMap[node.Name] = time.Now()
 	}
@@ -37,8 +34,8 @@ func (hk *HouseKeeper) NodeKeeping(nodeMap mapper.NodeMetricMapper) mapper.NodeM
 }
 
 func (hk *HouseKeeper) PodKeeping(podMap mapper.PodMetricMapper) mapper.PodMetricMapper {
-	pods, err := hk.KubeClient.CoreV1().Pods(corev1.NamespaceAll).List(context.Background(), metav1.ListOptions{})
-	if err != nil {
+	pods, _ := hk.KubeClient.CoreV1().Pods(corev1.NamespaceAll).List(context.Background(), metav1.ListOptions{})
+	if _ != nil {
 		klog.Errorln(err)
 	}
 	for _, pod := range pods.Items {
