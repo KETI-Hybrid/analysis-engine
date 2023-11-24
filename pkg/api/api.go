@@ -3,10 +3,13 @@ package api
 import (
 	"analysis-engine/pkg/api/crd"
 	"analysis-engine/pkg/api/k8s"
+	pb "analysis-engine/pkg/api/metric"
+	"context"
+	"time"
 
-	levelv1 "github.com/KETI-Hybrid/keti-controller/apis/level/v1"
 	keticlient "github.com/KETI-Hybrid/keti-controller/client"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 )
@@ -24,7 +27,6 @@ func NewClientManager() *ClientManager {
 	if err != nil {
 		klog.Errorln(err)
 	}
-	
 	result.KubeClient, err = k8s.NewClient()
 	if err != nil {
 		klog.Errorln(err)
@@ -34,26 +36,27 @@ func NewClientManager() *ClientManager {
 }
 
 type Metric struct {
-	CPUUsage      float32
-	MemoryUsage   float32
-	StorageUsage  float32
-	NetworkTXByte float64
-	NetworkRXByte float64
+	CPUUsage      int64
+	MemoryUsage   int64
+	StorageUsage  int64
+	NetworkTXByte int64
+	NetworkRXByte int64
 }
 
-func (cm *ClientManager) GetMetric(nodeName string) levelv1.NodeMetricSpec {
-	nodeMetric, err := cm.KetiClient.LevelV1().NodeMetrics().Get(nodeName, metav1.GetOptions{})
-	
+func (cm *ClientManager) GetMetric(podIP string) (*pb.MultiMetric, error) {
+	host := podIP + ":9444"
+	conn, err := grpc.Dial(host, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		klog.Errorln(err)
+		klog.Errorln("did not connect: %v", err)
 	}
-	return nodeMetric.Spec
-}
+	defer conn.Close()
+	metricClient := pb.NewMetricCollectorClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
 
-func (cm *ClientManager) GetPodMetric(podName string) levelv1.PodMetricSpec {
-	podMetric, _ := cm.KetiClient.LevelV1().PodMetrics().Get(podName, metav1.GetOptions{})
+	r, err := metricClient.GetMultiMetric(ctx, &pb.Request{})
 	// if err != nil {
-	// 	klog.Errorln(err)
+	// 	klog.Errorf("could not request: %v \n", err)
 	// }
-	return podMetric.Spec
+	return r, err
 }
