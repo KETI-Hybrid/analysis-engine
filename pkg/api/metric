@@ -1,1 +1,31 @@
 
+syntax = "proto3";
+
+package metric;
+
+option go_package = "analysis-engine/pkg/api/metric";
+
+service MetricCollector {
+  rpc GetMultiMetric(Request) returns (MultiMetric);
+}
+message Request {}
+message MultiMetric {
+  string node_name = 1;
+  NodeMetric node_metric = 2;
+}
+message NodeMetric {
+  int64 cpu_usage = 1;
+  int64 memory_usage = 2;
+  int64 storage_usage = 3;
+  int64 network_rx = 4;
+  int64 network_tx = 5;
+  repeated string cluster = 6;
+  map<string, PodMetric> pod_metrics = 7;
+}
+message PodMetric {
+  int64 cpu_usage = 1;
+  int64 memory_usage = 2;
+  int64 storage_usage = 3;
+  int64 network_rx = 4;
+  int64 network_tx = 5;
+}
