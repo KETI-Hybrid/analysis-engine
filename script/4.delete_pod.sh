@@ -23,4 +23,4 @@
 
 
 
-kubectl delete -f /root/workspace/hth/dev/analysis-engine/deploy/analysis-engine.yaml
+kubectl delete -f /root/workspace/pjh/dev/analysis-engine/deploy/analysis-engine.yaml
